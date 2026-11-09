@@ -19,7 +19,7 @@ In playhound: **Settings → Plugins**. Under **Discover**, **Add from GitHub** 
 Switch it on, and if Stash isn't at `http://localhost:9999`, type its address in its settings. Its scenes with a funscript appear in the **Library** under a **Stash** badge, and **Stash** in the folder picker shows only them. They search, sort, star, queue and go in playlists like your own videos.
 
 - Each scene brings its **title** (or its file name), its **funscript**, its **tags**, its **performers and studio** as tags too, its **markers** as the script's chapters, its **screenshot** and its **length**. Its info links back to the scene in Stash.
-- Playing one streams it from Stash. A file a browser can't play (WMV, AVI…) streams as an MP4 that Stash converts as it goes; seeking in one of those starts it again from the beginning.
+- Playing one streams it from Stash. A file a browser can't play (WMV, AVI…) is converted by Stash as it plays (HLS, a few seconds at a time), so it seeks like any other; it takes a moment to start, and Stash's CPU.
 - The **Stash** panel (its button on the right-hand rail) says whether it's connected, how many scenes it has, when it last looked and when it looks next. **Look again** fetches the list now, **Test connection** says plainly what's wrong if something is, and **Open Stash** opens Stash itself. **Look for new scenes in Stash** is in the command palette (Ctrl K) too.
 
 ### A Stash with a password
@@ -35,7 +35,7 @@ In **Settings → Plugins → Stash**:
 - **Address** and **API key**.
 - **Scenes**: all of them, those **with a tag** (and its sub-tags, if you like), or a **saved filter** from Stash. **Only scenes with a script** (on by default) narrows any of them to the ones Stash marks interactive.
 - **Look again**: every 5, 15, 30 (the default) or 60 minutes, or only when you ask.
-- **Stream**: the file, with Stash's MP4 for the ones a browser won't play (the default); always the file; or always the MP4.
+- **Stream**: the file, converted by Stash when a browser won't play it (the default); always the file; or always converted.
 - **Performers and studio as tags**.
 - **Tell Stash**: **Count plays** adds a play to the scene in Stash once it has played for 10 seconds; **Count O's** adds to its O counter when you mark **I came** (C) during it. Both off unless you switch them on.
 
@@ -66,7 +66,7 @@ phstash talks only to the Stash address you give it. It keeps its settings (the 
 
 ### Without a Stash
 
-`npm run fake-stash` starts a pretend Stash on `http://127.0.0.1:9998` with a few made-up scenes: a test-pattern video (made once with ffmpeg, in `dev/media/`), funscripts, screenshots, tags, performers, markers and two saved filters. `-- --api-key KEY` makes it want a key, `-- --version v0.24.0` makes it too old, `-- --scenes 1000` makes paging do some work. It logs every request, and shouts if a key ever arrives in an address.
+`npm run fake-stash` starts a pretend Stash on `http://127.0.0.1:9998` with a few made-up scenes: a test-pattern video (made once with ffmpeg, in `dev/media/`), funscripts, screenshots, tags, performers, markers, saved filters, a scene that needs converting (HLS) and one without a cover, answering the way a real Stash 0.32 does. `-- --api-key KEY` makes it want a key, `-- --version v0.24.0` makes it too old, `-- --scenes 1000` makes paging do some work. It logs every request, and shouts if a key ever arrives in an address.
 
 ## License
 

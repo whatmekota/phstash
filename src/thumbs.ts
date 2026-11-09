@@ -53,8 +53,11 @@ export function createThumbs(o: { fetch: FetchFn, storage: Storage, onProgress: 
     }
     try {
       const res = await o.fetch(`${server}/scene/${encodeURIComponent(s.id)}/screenshot`, { headers })
-      // A missing screenshot, or the login page: nothing to show.
-      if (!res.ok || !/^image\//i.test(res.headers.get('content-type') ?? ''))
+      // A missing screenshot, or the login page: nothing to show. Stash answers a
+      // scene without a cover with its own play-icon SVG (seen on Stash 0.32),
+      // which is no picture of the scene: playhound's placeholder is better.
+      const type = res.headers.get('content-type') ?? ''
+      if (!res.ok || !/^image\//i.test(type) || /svg/i.test(type))
         return
       const url = await shrink(await res.blob())
       if (!url || my !== gen)

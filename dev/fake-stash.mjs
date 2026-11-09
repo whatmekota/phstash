@@ -11,7 +11,7 @@
 // dev/media/); everything else is made here.
 
 import { execFileSync } from 'node:child_process'
-import { createReadStream, existsSync, mkdirSync, statSync } from 'node:fs'
+import { createReadStream, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import http from 'node:http'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -36,6 +36,17 @@ if (!existsSync(videoPath)) {
   console.log('making the test video with ffmpeg...')
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `testsrc2=size=640x360:rate=30:duration=${VIDEO_S}`, '-f', 'lavfi', '-i', `sine=frequency=440:duration=${VIDEO_S}`, '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-crf', '30', '-c:a', 'aac', '-b:a', '64k', '-movflags', '+faststart', videoPath])
 }
+
+// Stash converts a file a browser can't play to HLS (/scene/{id}/stream.m3u8, segments at
+// /scene/{id}/stream.m3u8/{n}.ts): the same video cut into segments stands in for that.
+const hlsDir = join(mediaDir, 'hls')
+if (!existsSync(join(hlsDir, 'index.m3u8'))) {
+  mkdirSync(hlsDir, { recursive: true })
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', videoPath, '-c', 'copy', '-f', 'hls', '-hls_time', '2', '-hls_playlist_type', 'vod', '-hls_segment_filename', join(hlsDir, '%d.ts'), join(hlsDir, 'index.m3u8')])
+}
+
+// Stash answers a scene with no cover with its own play icon, an SVG.
+const NO_COVER = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg>'
 
 /** A 320×180 PNG: a diagonal gradient in the scene's hue with a few bars, made by hand. */
 function screenshot(seed) {
@@ -116,7 +127,8 @@ const scenes = Array.from({ length: SCENE_COUNT }, (_, i) => {
   const tagIds = ['1', interactive ? (n % 2 ? '2' : '3') : '5', ...(n === 4 ? ['4'] : [])]
   return {
     id: String(n),
-    title: n === 5 ? null : TITLES[i % TITLES.length],
+    // Stash gives an untitled scene an empty title, not null.
+    title: n === 5 ? '' : TITLES[i % TITLES.length],
     date: '2026-10-0' + ((n % 9) + 1),
     interactive,
     interactive_speed: interactive ? 120 + n * 20 : null,
@@ -124,7 +136,8 @@ const scenes = Array.from({ length: SCENE_COUNT }, (_, i) => {
     play_count: 0,
     rating100: n % 3 ? 80 : null,
     updated_at: new Date(created + n * 3600_000).toISOString(),
-    files: [{ basename: `pattern_${String(n).padStart(2, '0')}.mp4`, duration: VIDEO_S, format: 'mp4', video_codec: 'h264' }],
+    // Scene 3 claims to be a WMV, so phstash asks for Stash's conversion (HLS).
+    files: [n === 3 ? { basename: 'pattern_03.wmv', duration: VIDEO_S, format: 'wmv', video_codec: 'wmv2' } : { basename: `pattern_${String(n).padStart(2, '0')}.mp4`, duration: VIDEO_S, format: 'mp4', video_codec: 'h264' }],
     scene_markers: interactive
       ? [
           { title: 'Warm-up', seconds: 0, end_seconds: 6, primary_tag: { name: 'Slow' } },
@@ -142,6 +155,8 @@ const scenes = Array.from({ length: SCENE_COUNT }, (_, i) => {
 const SAVED = [
   { id: '1', mode: 'SCENES', name: 'Fast ones', find_filter: { q: null }, object_filter: { tags: { modifier: 'INCLUDES', value: { items: [{ id: '3', label: 'Fast' }], excluded: [], depth: -1 } } } },
   { id: '2', mode: 'SCENES', name: 'Search: pixel', find_filter: { q: 'pixel' }, object_filter: {} },
+  // As Stash 0.32's UI saves a performer criterion: { items, excluded }, no depth.
+  { id: '4', mode: 'SCENES', name: 'Ava Synth', find_filter: { q: '', sort: 'date', direction: 'ASC', per_page: 40 }, object_filter: { performers: { modifier: 'INCLUDES', value: { excluded: [], items: [{ id: '1', label: 'Ava Synth' }] } } } },
   { id: '3', mode: 'PERFORMERS', name: 'Favourite performers', find_filter: null, object_filter: { filter_favorites: { modifier: 'EQUALS', value: 'true' } } },
 ]
 
@@ -180,7 +195,9 @@ function matches(s, f = {}, q) {
     if ((f.tags.excludes ?? []).some(id => s.tagIds.includes(id)))
       return false
   }
-  if (q && !(s.title ?? s.files[0].basename).toLowerCase().includes(q.toLowerCase()))
+  if (f.performers && !s.performers.some(p => f.performers.value.includes(String(PERFORMERS.indexOf(p.name) + 1))))
+    return false
+  if (q && !(s.title || s.files[0].basename).toLowerCase().includes(q.toLowerCase()))
     return false
   return true
 }
@@ -194,7 +211,10 @@ function graphql(body) {
     case 'PhstashScenes':
     case 'PhstashCount': {
       if (!knowsMarkerEnd && /end_seconds/.test(body.query))
-        return { status: 422, body: { errors: [{ message: 'Cannot query field "end_seconds" on type "SceneMarker".' }], data: null } }
+        return { status: 400, body: { errors: [{ message: 'Cannot query field "end_seconds" on type "SceneMarker".', extensions: { code: 'GRAPHQL_VALIDATION_FAILED' } }], data: null } }
+      // Stash refuses a depth on performers (MultiCriterionInput), as a real 0.32 did.
+      if (v.scene_filter?.performers && 'depth' in v.scene_filter.performers)
+        return { status: 400, body: { errors: [{ message: 'unknown field', path: ['variable', 'scene_filter', 'performers', 'depth'], extensions: { code: 'GRAPHQL_VALIDATION_FAILED' } }], data: null } }
       const filter = v.filter ?? {}
       const list = scenes.filter(s => matches(s, v.scene_filter, filter.q)).sort((a, b) => Number(a.id) - Number(b.id))
       const per = filter.per_page === -1 ? list.length : (filter.per_page ?? 25)
@@ -293,15 +313,24 @@ http.createServer((req, res) => {
     return
   }
 
-  let m = /^\/scene\/(\d+)\/(stream|stream\.mp4|funscript|screenshot)$/.exec(url.pathname)
+  let m = /^\/scene\/(\d+)\/(stream|stream\.mp4|stream\.m3u8|stream\.m3u8\/(\d+)\.ts|funscript|screenshot)$/.exec(url.pathname)
   if (m) {
     const s = scenes.find(x => x.id === m[1])
     if (!s)
       return send(res, 404, 'not found')
     if (m[2] === 'stream' || m[2] === 'stream.mp4')
       return serveFile(req, res, videoPath, 'video/mp4')
+    if (m[2] === 'stream.m3u8') {
+      // Segment addresses from the root, as Stash writes them (no key in them).
+      const list = readFileSync(join(hlsDir, 'index.m3u8'), 'utf8').replace(/^(\d+)\.ts$/gm, `/scene/${s.id}/stream.m3u8/$1.ts`)
+      return send(res, 200, list, { 'Content-Type': 'application/vnd.apple.mpegurl' })
+    }
+    if (m[3] !== undefined)
+      return existsSync(join(hlsDir, `${m[3]}.ts`)) ? serveFile(req, res, join(hlsDir, `${m[3]}.ts`), 'video/MP2T') : send(res, 404, 'no segment')
     if (m[2] === 'funscript')
       return s.interactive ? send(res, 200, funscript(Number(s.id))) : send(res, 404, 'no funscript')
+    if (Number(s.id) % 6 === 0)
+      return send(res, 200, NO_COVER, { 'Content-Type': 'image/svg+xml' })
     return send(res, 200, screenshot(Number(s.id)), { 'Content-Type': 'image/png', 'Cache-Control': 'no-cache' })
   }
   m = /^\/scenes\/(\d+)$/.exec(url.pathname)
