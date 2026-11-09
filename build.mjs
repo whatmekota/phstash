@@ -88,11 +88,15 @@ mkdirSync(join(here, 'dist'), { recursive: true })
 const out = zip([
   ['manifest.json', Buffer.from(zipped, 'utf8')],
   ['index.js', readFileSync(join(here, 'dist/index.js'))],
+  // The store's icon, also for an install from the zip.
+  ['icon.png', readFileSync(join(here, 'icon.png'))],
 ])
 let file
 if (PUBLIC) {
   mkdirSync(join(here, 'release'), { recursive: true })
   file = join('release', `phstash-${manifest.version}.zip`)
+  // The icon beside it, as a release asset: the store shows it before downloading.
+  writeFileSync(join(here, 'release', 'icon.png'), readFileSync(join(here, 'icon.png')))
   // The store in playhound reads this to show the plugin before downloading it.
   writeFileSync(join(here, 'release', 'manifest.json'), zipped)
 }

@@ -3,11 +3,25 @@
   "name": "Stash",
   "version": "0.1.0",
   "description": "Your Stash collection in playhound's library: the scenes with a script, streamed from Stash with their funscripts, tags, performers and markers.",
+  "icon": "icon.png",
   "author": "whatmekota",
   "main": "dist/index.js",
   "api": 3,
-  "permissions": ["network", "library-source", "player"],
+  "permissions": [
+    "network",
+    "library-source",
+    "player"
+  ],
   "category": "library",
-  "keywords": ["stash", "stashapp", "library", "media server", "streaming", "funscript", "interactive", "self-hosted"],
+  "keywords": [
+    "stash",
+    "stashapp",
+    "library",
+    "media server",
+    "streaming",
+    "funscript",
+    "interactive",
+    "self-hosted"
+  ],
   "minPlayhound": "2.2.0"
 }
