@@ -1,0 +1,20 @@
+{
+  "name": "phstash",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:public": "node build.mjs --public --minify",
+    "test": "node --import tsx --test test/graphql.test.ts test/map.test.ts test/stash.test.ts test/savedFilter.test.ts test/writeback.test.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "fake-stash": "node dev/fake-stash.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "description": "phstash: your Stash (stashapp) collection as a library source in playhound.",
+  "license": "MIT"
+}
