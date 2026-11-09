@@ -4,6 +4,7 @@ import { describe, it } from 'node:test'
 import { playsDirectly, sceneTitle, sceneToVideo } from '../src/map.ts'
 
 const SERVER = 'http://stash.lan:9999'
+const pick = (v: { url: string, kind?: string }) => ({ url: v.url, kind: v.kind })
 
 function scene(over: Partial<StashScene> = {}): StashScene {
   return {
@@ -63,11 +64,11 @@ describe('a scene as a library video', () => {
     assert.deepEqual(sceneToVideo(scene(), { server: SERVER, stream: 'auto', peopleAsTags: false }).tags, ['Outdoor', 'POV'])
   })
 
-  it('streams Stash\'s MP4 for files a browser won\'t play, or always when asked', () => {
+  it('streams Stash\'s conversion (HLS) for files a browser won\'t play, or always when asked', () => {
     const wmv = scene({ files: [{ basename: 'old.wmv', duration: 10, format: 'wmv', video_codec: 'wmv2' }] })
-    assert.equal(sceneToVideo(wmv, { server: SERVER, stream: 'auto', peopleAsTags: true }).url, `${SERVER}/scene/42/stream.mp4`)
-    assert.equal(sceneToVideo(wmv, { server: SERVER, stream: 'direct', peopleAsTags: true }).url, `${SERVER}/scene/42/stream`)
-    assert.equal(sceneToVideo(scene(), { server: SERVER, stream: 'mp4', peopleAsTags: true }).url, `${SERVER}/scene/42/stream.mp4`)
+    assert.deepEqual(pick(sceneToVideo(wmv, { server: SERVER, stream: 'auto', peopleAsTags: true })), { url: `${SERVER}/scene/42/stream.m3u8`, kind: 'hls' })
+    assert.deepEqual(pick(sceneToVideo(wmv, { server: SERVER, stream: 'direct', peopleAsTags: true })), { url: `${SERVER}/scene/42/stream`, kind: 'file' })
+    assert.deepEqual(pick(sceneToVideo(scene(), { server: SERVER, stream: 'convert', peopleAsTags: true })), { url: `${SERVER}/scene/42/stream.m3u8`, kind: 'hls' })
     assert.equal(playsDirectly({ basename: 'a.mkv', duration: 1, format: 'matroska', video_codec: 'vp9' }), true)
     assert.equal(playsDirectly({ basename: 'a.avi', duration: 1, format: 'avi', video_codec: 'mpeg4' }), false)
     assert.equal(playsDirectly(undefined), true)

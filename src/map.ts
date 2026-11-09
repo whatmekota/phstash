@@ -13,12 +13,18 @@ import type { ProvidedVideo } from './types'
  * the stream and with the script requests.
  *
  * Routes (internal/api/routes_scene.go): /scene/{id}/stream (the file, with
- * Range), /scene/{id}/stream.mp4 (transcoded), /scene/{id}/funscript,
+ * Range), /scene/{id}/stream.m3u8 (converted, as HLS), /scene/{id}/funscript,
  * /scene/{id}/screenshot; the scene's page in Stash's UI is /scenes/{id}.
  */
 
-/** 'auto': the file itself when a browser plays it, else Stash's MP4 transcode. */
-export type StreamMode = 'auto' | 'direct' | 'mp4'
+/**
+ * 'auto': the file itself when a browser plays it, else converted by Stash.
+ * Converted means HLS (stream.m3u8): a VOD playlist of the whole length, its
+ * segments converted as they're asked for, so the length is known and seeking
+ * works. Stash's stream.mp4 is converted as one stream, whose length grows as it
+ * plays and which can't seek ahead (seen with a real Stash 0.32).
+ */
+export type StreamMode = 'auto' | 'direct' | 'convert'
 
 export interface MapOptions {
   server: string
@@ -43,9 +49,10 @@ export function playsDirectly(file: StashScene['files'][number] | undefined): bo
   return (!format || CONTAINERS.has(format)) && (!codec || CODECS.has(codec))
 }
 
-export function streamUrl(server: string, s: StashScene, mode: StreamMode): string {
-  const mp4 = mode === 'mp4' || (mode === 'auto' && !playsDirectly(s.files?.[0]))
-  return `${server}/scene/${encodeURIComponent(s.id)}/${mp4 ? 'stream.mp4' : 'stream'}`
+export function streamOf(server: string, s: StashScene, mode: StreamMode): { url: string, kind: 'file' | 'hls' } {
+  const convert = mode === 'convert' || (mode === 'auto' && !playsDirectly(s.files?.[0]))
+  const base = `${server}/scene/${encodeURIComponent(s.id)}`
+  return convert ? { url: `${base}/stream.m3u8`, kind: 'hls' } : { url: `${base}/stream`, kind: 'file' }
 }
 
 /** Stash's screenshot, which loads without headers only on a Stash with no password. */
@@ -94,8 +101,7 @@ export function sceneToVideo(s: StashScene, o: MapOptions): ProvidedVideo {
   return {
     id: s.id,
     title: sceneTitle(s),
-    url: streamUrl(o.server, s, o.stream),
-    kind: 'file',
+    ...streamOf(o.server, s, o.stream),
     ...(o.headers ? { headers: { ...o.headers } } : {}),
     // Stash pairs one funscript with a scene (video.GetFunscriptPath): the stroke.
     scripts: s.interactive ? [{ url: `${o.server}/scene/${id}/funscript` }] : [],

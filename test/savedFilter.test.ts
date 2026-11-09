@@ -14,6 +14,16 @@ describe('saved filters', () => {
     assert.deepEqual(out.studios, { value: ['2'], excludes: [], modifier: 'EQUALS', depth: 0 })
   })
 
+  it('gives performers no depth, as Stash 0.32\'s UI saves them ({ items, excluded }) and Stash refuses one', () => {
+    // Saved through Stash 0.32's own UI.
+    const out = translateSavedFilter({
+      performers: { modifier: 'INCLUDES', value: { excluded: [], items: [{ id: '1', label: 'Ava Synth' }] } },
+      tags: { modifier: 'INCLUDES', value: { depth: 0, excluded: [], items: [{ id: '1', label: 'Slow' }] } },
+    })
+    assert.deepEqual(out.performers, { value: ['1'], excludes: [], modifier: 'INCLUDES' })
+    assert.deepEqual(out.tags, { value: ['1'], excludes: [], modifier: 'INCLUDES', depth: 0 })
+  })
+
   it('turns a list of labelled ids into a multi criterion', () => {
     assert.deepEqual(
       translateSavedFilter({ performers: { modifier: 'INCLUDES', value: [{ id: '7', label: 'A' }, { id: '8', label: 'B' }] } }),

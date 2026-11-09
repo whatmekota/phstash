@@ -129,14 +129,17 @@ export async function readAnswer<T>(res: Response, server: string, sentKey: bool
   if (res.status >= 500)
     throw new StashError('server', `Stash had a problem (HTTP ${res.status}).${snippet(text)}`)
 
-  let body: { data?: T, errors?: { message?: string }[] } | null = null
+  // Stash 0.29+ answers application/graphql-response+json, and a request it
+  // won't take with HTTP 400 and the errors in the body, so the body is read
+  // whatever the type and status.
+  let body: { data?: T, errors?: { message?: string, path?: unknown[] }[] } | null = null
   try {
     body = JSON.parse(text)
   }
   catch {}
   if (!body || typeof body !== 'object' || (!('data' in body) && !('errors' in body)))
     throw new StashError('not-stash', `Something answers at ${server}, but it isn't Stash (HTTP ${res.status}, not a GraphQL answer).`)
-  const errors = Array.isArray(body.errors) ? body.errors.map(e => String(e?.message ?? '')).filter(Boolean) : []
+  const errors = Array.isArray(body.errors) ? body.errors.map(errorText).filter(Boolean) : []
   if (errors.length) {
     // A field or argument this Stash doesn't know: it's older than what phstash asks for.
     if (errors.some(m => /Cannot query field|Unknown argument|Unknown type|Cannot query/i.test(m)))
@@ -146,6 +149,16 @@ export async function readAnswer<T>(res: Response, server: string, sentKey: bool
   if (!res.ok)
     throw new StashError('server', `Stash answered HTTP ${res.status}.${snippet(text)}`)
   return body.data as T
+}
+
+/** "unknown field (at performers.depth)": where in what phstash sent, when Stash says. */
+export function errorText(e: { message?: string, path?: unknown[] } | null | undefined): string {
+  const message = String(e?.message ?? '').trim()
+  if (!message || !Array.isArray(e?.path) || !e.path.length)
+    return message
+  // ["variable", "scene_filter", "performers", "depth"]: the part inside the variable.
+  const path = e.path[0] === 'variable' ? e.path.slice(2) : e.path
+  return path.length ? `${message} (at ${path.join('.')})` : message
 }
 
 function snippet(text: string): string {

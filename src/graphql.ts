@@ -217,17 +217,19 @@ function translateCriterion(key: string, c: unknown): unknown {
     return { modifier, value: RESOLUTIONS[String(value).toLowerCase()] ?? String(value).toUpperCase() }
   if (key === 'orientation')
     return { value: (Array.isArray(value) ? value : [value]).map(v => String(v).toUpperCase()) }
-  // Tags, studios, groups…: { items: [{ id, label }], excluded, depth }.
+  // Tags, studios, groups: { items: [{ id, label }], excluded, depth }. Stash
+  // 0.32's UI saves performers this way too, without a depth: their input
+  // (MultiCriterionInput) has none, and Stash refuses one.
   if (isObj(value) && Array.isArray(value.items)) {
     return {
       value: value.items.map(idOf),
       excludes: Array.isArray(value.excluded) ? value.excluded.map(idOf) : [],
       modifier,
       // An "equals" can't reach into sub-tags.
-      depth: modifier === 'EQUALS' ? 0 : Number(value.depth ?? 0),
+      ...('depth' in value ? { depth: modifier === 'EQUALS' ? 0 : Number(value.depth ?? 0) } : {}),
     }
   }
-  // Performers, galleries: [{ id, label }].
+  // Performers, galleries, as older UIs saved them: [{ id, label }].
   if (Array.isArray(value) && value.every(v => isObj(v) && 'id' in v))
     return { value: value.map(idOf), modifier }
   // Numbers, durations and dates: { value, value2 }.

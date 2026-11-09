@@ -58,7 +58,7 @@ export default async function activate(ctx: PluginContext) {
   let cfg = readConfig(ctx.settings.all())
   let disposed = false
 
-  // â”€â”€â”€ State, and who wants to hear about it â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── State, and who wants to hear about it ───────────────────────────────
   let phase: Phase = 'idle'
   let scenes: StashScene[] = []
   /** The server `scenes` came from (normalised). */
@@ -87,7 +87,7 @@ export default async function activate(ctx: PluginContext) {
     }
   }
 
-  // â”€â”€â”€ The library source â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── The library source ──────────────────────────────────────────────────
   const thumbs = createThumbs({
     fetch: ctx.net.fetch,
     storage: ctx.storage,
@@ -152,7 +152,7 @@ export default async function activate(ctx: PluginContext) {
     }, ms)
   }
 
-  // â”€â”€â”€ Fetching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Fetching ────────────────────────────────────────────────────────────
   let syncing: Promise<void> | null = null
   let again = false
   let wasOnline = false
@@ -222,9 +222,17 @@ export default async function activate(ctx: PluginContext) {
     catch (err) {
       if (disposed)
         return
+      progress = null
+      if (err instanceof SelectionError) {
+        // A choice not finished yet ("With a tag", no tag picked): nothing is
+        // wrong with Stash, so the library stays as it is until there's one.
+        error = err.message
+        phase = scenes.length && shownLabel === LABEL ? 'online' : 'error'
+        changed()
+        return
+      }
       const e = asStashError(err)
       error = e.message
-      progress = null
       ctx.log('could not fetch scenes:', e.kind, e.message)
       if (scenes.length && sceneServer === currentServer()) {
         // Kept, marked: see the top of this file.
@@ -251,7 +259,7 @@ export default async function activate(ctx: PluginContext) {
     changed()
   }
 
-  // â”€â”€â”€ The timer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── The timer ───────────────────────────────────────────────────────────
   let timer: ReturnType<typeof setTimeout> | null = null
   function schedule() {
     if (timer)
@@ -270,7 +278,7 @@ export default async function activate(ctx: PluginContext) {
     changed()
   }
 
-  // â”€â”€â”€ Testing the connection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Testing the connection ──────────────────────────────────────────────
   async function runTest() {
     test = { busy: true }
     changed()
@@ -293,7 +301,7 @@ export default async function activate(ctx: PluginContext) {
     changed()
   }
 
-  // â”€â”€â”€ Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Settings ────────────────────────────────────────────────────────────
   async function options(query: string, pick: (data: any) => { id: string, name: string }[], empty: string): Promise<SelectOption[]> {
     let list: { id: string, name: string }[]
     try {
@@ -350,7 +358,7 @@ export default async function activate(ctx: PluginContext) {
     return `${base}${cfg.interactiveOnly ? ', with a script' : ''}`
   }
 
-  // â”€â”€â”€ The panel and the command â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── The panel and the command ───────────────────────────────────────────
   ctx.ui.panel({
     title: 'Stash',
     icon: ICON,
@@ -393,7 +401,7 @@ export default async function activate(ctx: PluginContext) {
     run: () => void sync(true),
   })
 
-  // â”€â”€â”€ Telling Stash (off by default) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Telling Stash (off by default) ──────────────────────────────────────
   async function tell(mutation: string, sceneId: string, what: 'play' | 'o') {
     if (!sceneServer || sceneServer !== currentServer())
       return
@@ -424,7 +432,7 @@ export default async function activate(ctx: PluginContext) {
       void tell(ADD_O_MUTATION, id, 'o')
   })
 
-  // â”€â”€â”€ Start: what was kept, then a fresh look â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Start: what was kept, then a fresh look ─────────────────────────────
   const cache = await ctx.storage.get<Cache>('cache').catch(() => undefined)
   if (cache && Array.isArray(cache.scenes) && cache.server === currentServer()) {
     scenes = cache.scenes

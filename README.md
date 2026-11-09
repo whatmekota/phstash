@@ -8,29 +8,29 @@ Needs playhound **2.2** or newer, in the desktop app or a browser, and Stash **0
 
 ## Install
 
-In playhound: **Settings â†’ Plugins**. Under **Discover**, **Add from GitHub** `whatmekota/phstash` and click **Install**, or download `phstash-<version>.zip` from [Releases](https://github.com/whatmekota/phstash/releases) and drop it on that page. It asks for four permissions:
+In playhound: **Settings → Plugins**. Under **Discover**, **Add from GitHub** `whatmekota/phstash` and click **Install**, or download `phstash-<version>.zip` from [Releases](https://github.com/whatmekota/phstash/releases) and drop it on that page. It asks for three permissions:
 
 - **Connect to servers through playhound**: to talk to your Stash.
 - **Add videos to your library from another app**: the scenes themselves.
-- **See what is playing** and **know when you finish**: only for **Tell Stash** below, which is off until you switch it on. phstash never calls an edge or touches the intensity, though playhound's permission for hearing "I came" covers those too.
+- **See what is playing**: only for **Tell Stash** below (which scene plays, and when you mark "I came"), which is off until you switch it on.
 
 ## Using it
 
 Switch it on, and if Stash isn't at `http://localhost:9999`, type its address in its settings. Its scenes with a funscript appear in the **Library** under a **Stash** badge, and **Stash** in the folder picker shows only them. They search, sort, star, queue and go in playlists like your own videos.
 
 - Each scene brings its **title** (or its file name), its **funscript**, its **tags**, its **performers and studio** as tags too, its **markers** as the script's chapters, its **screenshot** and its **length**. Its info links back to the scene in Stash.
-- Playing one streams it from Stash. A file a browser can't play (WMV, AVIâ€¦) streams as an MP4 that Stash converts as it goes; seeking in one of those starts it again from the beginning.
+- Playing one streams it from Stash. A file a browser can't play (WMV, AVI…) streams as an MP4 that Stash converts as it goes; seeking in one of those starts it again from the beginning.
 - The **Stash** panel (its button on the right-hand rail) says whether it's connected, how many scenes it has, when it last looked and when it looks next. **Look again** fetches the list now, **Test connection** says plainly what's wrong if something is, and **Open Stash** opens Stash itself. **Look for new scenes in Stash** is in the command palette (Ctrl K) too.
 
 ### A Stash with a password
 
-Copy its API key from Stash (**Settings â†’ Security â†’ API Key**) into phstash's **API key**. It goes to Stash in a header, never in an address. With a key, the screenshots are fetched by phstash, made small and kept, since a picture in the library can't send a header; they fill in over the first minute or so.
+Copy its API key from Stash (**Settings → Security → API Key**) into phstash's **API key**. It goes to Stash in a header, never in an address. With a key, the screenshots are fetched by phstash, made small and kept, since a picture in the library can't send a header; they fill in over the first minute or so.
 
 Playing a scene from a Stash with a password goes through playhound's local stream proxy: the desktop app runs it; in a browser, run playhound's `start.bat` (or `pnpm dev:proxy`) too.
 
 ### Settings
 
-In **Settings â†’ Plugins â†’ Stash**:
+In **Settings → Plugins → Stash**:
 
 - **Address** and **API key**.
 - **Scenes**: all of them, those **with a tag** (and its sub-tags, if you like), or a **saved filter** from Stash. **Only scenes with a script** (on by default) narrows any of them to the ones Stash marks interactive.
@@ -45,7 +45,7 @@ The scenes it last saw stay in the library, under **Stash (offline)**, instead o
 
 ## What it can't do
 
-- **Multi-axis scripts**: Stash pairs one `.funscript` with each scene, the stroke, and serves only that one. Extra axes next to the video (`.twist.funscript`â€¦) don't reach playhound through Stash.
+- **Multi-axis scripts**: Stash pairs one `.funscript` with each scene, the stroke, and serves only that one. Extra axes next to the video (`.twist.funscript`…) don't reach playhound through Stash.
 - Stash's **rating** and **O counter** aren't shown in playhound, and playhound's stars don't go back to Stash.
 - A saved filter is translated the way Stash's own UI does it. An unusual criterion Stash can't take this way shows its error in the panel.
 - playhound takes up to 20,000 videos from one source.
@@ -62,7 +62,7 @@ phstash talks only to the Stash address you give it. It keeps its settings (the 
     npm test
     npm run typecheck
 
-`manifest.json` points at `dist/index.js`, so **Settings â†’ Plugins â†’ Load from folderâ€¦** runs this folder as it is after a build; the zip's copy points at `index.js`. `src/types.ts` is a copy of playhound's plugin contract (`src/plugins/types.ts`); keep it in step.
+`manifest.json` points at `dist/index.js`, so **Settings → Plugins → Load from folder…** runs this folder as it is after a build; the zip's copy points at `index.js`. `src/types.ts` is a copy of playhound's plugin contract (`src/plugins/types.ts`); keep it in step.
 
 ### Without a Stash
 

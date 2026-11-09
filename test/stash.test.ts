@@ -96,6 +96,14 @@ describe('talking to Stash', () => {
     await rejectsKind(checkVersion(createClient({ server: 'localhost:9999', fetch: field.f })), 'old', /too old/)
   })
 
+  it('reads a 400 with the errors in the body, as Stash 0.29+ answers, and says where', async () => {
+    // As a real Stash 0.32 answered a performer criterion with a depth.
+    const { f } = fake(() => new Response(JSON.stringify({ errors: [{ message: 'unknown field', path: ['variable', 'scene_filter', 'performers', 'depth'], extensions: { code: 'GRAPHQL_VALIDATION_FAILED' } }], data: null }), { status: 400, headers: { 'Content-Type': 'application/graphql-response+json' } }))
+    await rejectsKind(checkVersion(createClient({ server: 'localhost:9999', fetch: f })), 'query', /unknown field \(at performers\.depth\)/)
+    const old = fake(() => new Response(JSON.stringify({ errors: [{ message: 'Cannot query field "end_seconds" on type "SceneMarker".', locations: [{ line: 1, column: 3 }] }], data: null }), { status: 400 }))
+    await rejectsKind(checkVersion(createClient({ server: 'localhost:9999', fetch: old.f })), 'old')
+  })
+
   it('passes on Stash\'s other errors, and server trouble', async () => {
     const q = fake(() => json({ errors: [{ message: 'invalid tag id' }], data: null }))
     await rejectsKind(checkVersion(createClient({ server: 'localhost:9999', fetch: q.f })), 'query', /invalid tag id/)

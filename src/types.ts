@@ -106,13 +106,31 @@ export type StageView
 
 export interface PlayerSnapshot {
   playing: boolean
-  /** File name of what's loaded, or null. */
+  /**
+   * File name of what's loaded, or null. For a video a plugin provides
+   * (library.provide) it is `<plugin id>:<its id>`, the same as that video's
+   * id in library.list().
+   */
   title: string | null
   time: number
   duration: number
   hasScript: boolean
   /** The playback speed, 1 is normal (the one player.setRate sets). */
   rate: number
+  /** The picture's own size in pixels (API 3): 0 until the video has loaded, and for sound alone or a video playing elsewhere. Portrait when height > width. */
+  width: number
+  height: number
+}
+
+/** Where the picture is drawn in the player (player.picture), in CSS px from the player's top-left. */
+export interface PictureRect {
+  x: number
+  y: number
+  width: number
+  height: number
+  /** The player's own size: the picture is centred in it, letterboxed or pillarboxed. */
+  areaWidth: number
+  areaHeight: number
 }
 
 /** A video in the library, with what playhound knows about it. */
@@ -124,6 +142,11 @@ export interface LibraryVideo {
   /** From its library folder down, e.g. "Videos/sub/clip.mp4". */
   path: string
   durationS: number | null
+  /** The picture's size in pixels (API 3), once playhound has read it from the file; null before (see library.media) and for sound alone. */
+  width: number | null
+  height: number | null
+  /** The file's size in bytes (API 3); null for a video another app provides. */
+  sizeBytes: number | null
   hasScript: boolean
   starred: boolean
   /** How hard its script goes, once analysed; null before (see library.analyse). */
@@ -187,6 +210,12 @@ export interface MotionReadout {
   phase: number | null
   /** Milliseconds until the generator's stroke is next at the bottom (where a beat lands); null while it isn't stroking. */
   nextStrokeInMs: number | null
+  /**
+   * A script is playing and drives the stroke: the generator (motion.take)
+   * waits until it stops, since the two never fight over the same axis.
+   * What a plugin sets meanwhile applies when the script stops.
+   */
+  scriptDriving: boolean
 }
 
 /** The stroke generator, while a plugin holds it. */
@@ -360,8 +389,12 @@ export interface ExternalPlayback {
   update: (s: { time: number, playing: boolean, rate?: number, duration?: number }) => void
   /** Stop following it. The device stops; the other app plays on. */
   end: () => void
-  /** It ended: 'stopped' by the user, 'replaced' by another video, or 'ended' by end(). Returns an unsubscribe. */
-  onEnd: (fn: (reason: 'stopped' | 'replaced' | 'ended') => void) => () => void
+  /**
+   * It ended: 'stopped' by the user, 'replaced' by the user (or anything)
+   * playing another video here, 'restarted' by a new playback.external()
+   * call (yours or another plugin's), or 'ended' by end(). Returns an unsubscribe.
+   */
+  onEnd: (fn: (reason: 'stopped' | 'replaced' | 'restarted' | 'ended') => void) => () => void
   readonly active: boolean
 }
 
@@ -382,7 +415,11 @@ export interface NetSocket {
 /** A request to the plugin's address on the LAN server. */
 export interface HttpRequest {
   method: string
-  /** After the plugin's own prefix: "/" for /plugins/<id>/, "/library.json" for /plugins/<id>/library.json. */
+  /**
+   * After the plugin's own prefix: "/" for /plugins/<id>/, "/library.json" for
+   * /plugins/<id>/library.json. As sent, still percent-encoded ("/My%20Video.mp4"):
+   * decodeURIComponent each part you match against names.
+   */
   path: string
   query: Record<string, string>
   /** Lower-case names. */
@@ -529,6 +566,16 @@ export interface PluginContext {
      * a second). For keeping something in step with the picture.
      */
     clock: () => number
+    /**
+     * Where the picture is drawn in the player right now (API 3), in CSS px
+     * from the player's top-left, with the player's size: a portrait video is
+     * pillarboxed, a wide one letterboxed. Null with no picture (sound alone,
+     * a video playing elsewhere, nothing loaded). An overlay can also use the
+     * CSS variables --ph-picture-left / -top / -width / -height.
+     */
+    picture: () => PictureRect | null
+    /** The picture moved or changed size (a new video, a resize, fullscreen, the pop-out). Returns an unsubscribe. */
+    onPicture: (fn: (r: PictureRect | null) => void) => () => void
     /** Jump to `t` seconds. False with nothing loaded. */
     seek: (t: number) => boolean
     /** Set the playback speed (0.1–10, 1 is normal). It is the user's speed: the player shows it and keeps it. */
@@ -554,6 +601,19 @@ export interface PluginContext {
      * the video isn't in the library.
      */
     info: (videoId: string) => Promise<LibraryVideoInfo | null>
+    /**
+     * Its length, picture size and file size, reading the file for what
+     * isn't known yet (kept, so asking again is free) (API 3). Null if the
+     * video isn't in the library.
+     */
+    media: (videoId: string) => Promise<{ durationS: number | null, width: number | null, height: number | null, sizeBytes: number | null } | null>
+    /**
+     * Its library thumbnail as a JPEG data URL (320×180, the one the library
+     * shows), made from a frame of the video if there isn't one yet. For a
+     * provided video it is the picture its source gave, which may be an
+     * http(s) link instead (API 3). Null if there is none.
+     */
+    thumbnail: (videoId: string) => Promise<string | null>
     /** Add and remove tags on a video (permission `library-edit`). Returns its tags after, or null if it isn't in the library. */
     tag: (videoId: string, change: { add?: string[], remove?: string[] }) => Promise<string[] | null>
     /** Set (or clear, with null) the link a video came from, an http(s) URL (permission `library-edit`). False if it isn't in the library. */
@@ -586,6 +646,10 @@ export interface PluginContext {
     onEnded: (fn: (id: string | null) => void) => () => void
     /** Play the library video with this fingerprint (see library.fingerprint). False if there is none. */
     playFingerprint: (fp: string) => Promise<boolean>
+    /** What the Next key does: the next in the queue (or the auto-director's pick). False if there is nothing next. */
+    next: () => Promise<boolean>
+    /** What the Previous key does. False if there is nothing before. */
+    previous: () => Promise<boolean>
     /**
      * Follow a video that plays in another app, a VR headset (permission
      * `external`): its scripts play on every device to the clock you feed
@@ -632,6 +696,8 @@ export interface PluginContext {
     panicked: () => boolean
     /** Panic (Esc) fired: stop talking, stop moving. Control was already released. */
     onPanic: (fn: () => void) => () => void
+    /** Panic was lifted (the user pressed it again). Nothing restarts by itself: take control again if you need it. */
+    onResume: (fn: () => void) => () => void
   }
   net: {
     /**
@@ -660,9 +726,25 @@ export interface PluginContext {
      * replaces the handler. Resolves that address (null when the LAN server
      * isn't running).
      */
-    serve: (handler: HttpHandler) => Promise<string | null>
+    serve: (handler: HttpHandler, opts?: {
+      /**
+       * Also answer the short root paths headsets ask for on their own,
+       * `deovr` and/or `heresphere`: a request to `/deovr…` reaches your
+       * handler as `/deovr…` under your own path. The first plugin to claim
+       * one keeps it while it serves; see rootAliases() for what you got.
+       */
+      rootAliases?: ('deovr' | 'heresphere')[]
+    }) => Promise<string | null>
     /** The address serve() answers on, or null when it isn't serving. */
     url: () => string | null
+    /**
+     * The same on every address this computer has, one per network adapter
+     * (Wi-Fi, Ethernet, a VPN, a virtual machine's): url() is only the
+     * first. Show them all, or build links from a request's Host header.
+     */
+    urls: () => string[]
+    /** The root paths this plugin holds (see serve's rootAliases). */
+    rootAliases: () => ('deovr' | 'heresphere')[]
     stop: () => void
   }
   /**
@@ -689,8 +771,18 @@ export interface PluginContext {
        * a second up), never past the limit the user set for plugins.
        * Returns where it will stop. The user turning the knob, or panic,
        * stops the move. The user sees a notice saying which plugin did it.
+       * During a panic it may only lower the knob (at once, nothing moves
+       * then anyway).
        */
       set: (level: number) => number
+      /**
+       * Put the knob back where it was before this plugin first moved it
+       * (since its last restore), even above the plugin limit, since that
+       * was the user's own level. Ramps like set(); after a panic it only
+       * goes down. Returns where it will stop, or null when this plugin
+       * hasn't moved it (or the user has turned it since).
+       */
+      restore: () => number | null
       /** The most a plugin may set, as the user chose in Settings → Plugins. */
       max: () => number
       /** The knob moved, by anyone. Returns an unsubscribe. */

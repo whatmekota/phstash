@@ -34,7 +34,7 @@ export function readConfig(v: Record<string, unknown>): Config {
     subTags: bool(v.subTags, true),
     savedFilter: str(v.savedFilter, ''),
     interactiveOnly: bool(v.interactiveOnly, true),
-    stream: oneOf(v.stream, ['auto', 'direct', 'mp4'] as const, 'auto'),
+    stream: oneOf(v.stream, ['auto', 'direct', 'convert'] as const, 'auto'),
     peopleAsTags: bool(v.peopleAsTags, true),
     refreshMin: Number.isFinite(refresh) && refresh > 0 ? refresh : 0,
     writePlays: bool(v.writePlays, false),
@@ -90,11 +90,11 @@ export function fields(opts: { tags: () => Promise<SelectOption[]>, savedFilters
       label: 'Stream',
       default: 'auto',
       options: [
-        { value: 'auto', label: 'The file, or an MP4 when it won\'t play' },
+        { value: 'auto', label: 'The file, or converted when it won\'t play' },
         { value: 'direct', label: 'Always the file' },
-        { value: 'mp4', label: 'Always an MP4 (Stash converts it)' },
+        { value: 'convert', label: 'Always converted by Stash' },
       ],
-      hint: 'Stash converts as it streams, so seeking in a converted video starts it again from the beginning.',
+      hint: 'Converted means Stash turns it into a stream any player takes (HLS), a few seconds at a time as it plays. It takes Stash\'s CPU, and a moment to start.',
     },
     { key: 'peopleAsTags', type: 'switch', label: 'Performers and studio as tags', default: true },
 
