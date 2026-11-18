@@ -1,12 +1,12 @@
 {
   "name": "phstash",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
     "build:public": "node build.mjs --public --minify",
-    "test": "node --import tsx --test test/graphql.test.ts test/map.test.ts test/stash.test.ts test/savedFilter.test.ts test/writeback.test.ts",
+    "test": "node --import tsx --test test/graphql.test.ts test/map.test.ts test/stash.test.ts test/savedFilter.test.ts test/writeback.test.ts test/achievements.test.ts",
     "typecheck": "tsc -p tsconfig.json",
     "fake-stash": "node dev/fake-stash.mjs"
   },

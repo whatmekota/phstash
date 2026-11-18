@@ -10,8 +10,10 @@
  * There is no sandbox: install only plugins you trust. From API 2 a plugin
  * lists the permissions it needs, and ctx refuses the rest (see
  * src/plugins/manifest.ts). API 3 added playback.external, net.socket,
- * http, library.provide / mediaUrl / scriptUrl and session; docs/plugins.md
- * has the guide.
+ * http, library.provide / mediaUrl / scriptUrl and session; API 4 added
+ * player.video / effects, library.scripts / open, music and files; API 5
+ * the song's sections, music.plan and library.strokes.
+ * docs/plugins.md has the guide.
  */
 
 /** What a plugin can ask to do; see PERMISSIONS in src/plugins/manifest.ts. */
@@ -19,6 +21,8 @@ export type PluginPermission
   = | 'device' | 'scripts' | 'player' | 'playback' | 'library' | 'library-edit' | 'network' | 'stage' | 'web'
   // API 3
     | 'external' | 'session' | 'library-source' | 'socket' | 'serve'
+  // API 6
+    | 'heart'
 
 export interface PluginManifest {
   /** Lower-case letters, digits and dashes; the plugin's identity. */
@@ -44,7 +48,7 @@ export interface PluginManifest {
   /** Images attached to the release (PNG, JPEG, WebP), up to 6. */
   screenshots?: { file: string, caption?: string }[]
   homepage?: string
-  category?: 'partner' | 'sync' | 'library' | 'visuals' | 'devices' | 'tools'
+  category?: 'partner' | 'sync' | 'library' | 'visuals' | 'devices' | 'tools' | 'fun'
   keywords?: string[]
   /** The oldest playhound it runs on, like "2.2.0". An older one won't install it. */
   minPlayhound?: string
@@ -65,6 +69,39 @@ export type SettingField
       free?: boolean
     })
     | { type: 'heading', label: string, hint?: string, key?: undefined, when?: FieldBase['when'] }
+    /**
+     * A button (API 6): "Test connection", "Sign in", "Clear the cache".
+     * `run` gets the current values; what it returns (or resolves to) is
+     * shown under the button, and what it throws is shown as an error. The
+     * button waits while a promise runs. `key` only names it; nothing is saved.
+     */
+    | (FieldBase & {
+      type: 'button'
+      /** The button's own text; `label` when absent. */
+      text?: string
+      tone?: 'primary' | 'secondary' | 'danger'
+      run: (values: Record<string, unknown>) => void | string | Promise<void | string>
+      default?: undefined
+    })
+    /**
+     * A button that picks files (API 7): "Add sounds…", "Import a list".
+     * It opens the file dialog, and `run` gets the files picked (never an
+     * empty list: cancelling doesn't call it) and the current values. What it
+     * returns or throws shows under it, as for a button. Nothing is saved
+     * under `key`: keep what you need with `storage`.
+     */
+    | (FieldBase & {
+      type: 'file'
+      /** The button's own text; `label` when absent. */
+      text?: string
+      tone?: 'primary' | 'secondary' | 'danger'
+      /** What the dialog offers, as for an <input accept>: "audio/*", ".funscript,.json". Any file when absent. */
+      accept?: string
+      /** Let several be picked at once. */
+      multiple?: boolean
+      run: (files: File[], values: Record<string, unknown>) => void | string | Promise<void | string>
+      default?: undefined
+    })
 
 interface FieldBase {
   key: string
@@ -75,6 +112,66 @@ interface FieldBase {
 }
 
 export interface SelectOption { value: string, label: string }
+
+/**
+ * What a plugin says about itself (API 6), shown on its rail button and in
+ * Settings → Plugins: "Connected", "Signed out", "Syncing 40 videos".
+ */
+export interface PluginStatus {
+  /** A few words. */
+  text: string
+  /** ok green, warn amber, error red, busy pulsing; neutral (the default) is grey. */
+  tone?: 'ok' | 'warn' | 'error' | 'busy' | 'neutral'
+  /** A line more, for the tooltip and Settings. */
+  detail?: string
+}
+
+/** A heart-rate reading (API 6). */
+export interface HeartReading {
+  /** Smoothed beats a minute. */
+  bpm: number
+  /** Resting rate, learned over the session; null until there is enough to tell. */
+  baseline: number | null
+  /** 0–1, how far above resting. */
+  arousal: number
+  /** Beats gained over the last 15 s or so. */
+  rise: number
+  /** Where it comes from: the monitor's name, or the plugin that supplies it. */
+  source: string | null
+}
+
+/**
+ * An achievement of a plugin's own (API 7), shown in Stats → Achievements
+ * beside playhound's, under the plugin's name.
+ */
+export interface PluginAchievement {
+  /** Its own id, unique within the plugin: lower-case letters, digits and dashes. */
+  id: string
+  /** A few words: "Big spender". */
+  title: string
+  /** What earns it, one sentence: "Pull 100 times". */
+  description: string
+  /** An emoji (or two) for its badge. A trophy without one. */
+  icon?: string
+  /** For one earned by counting: unlocks when progress() reaches this. */
+  target?: number
+  /** Shown as "???" until it is earned. */
+  hidden?: boolean
+  /** How hard: 1 bronze, 2 silver, 3 gold, 4 platinum. 1 without one. */
+  tier?: 1 | 2 | 3 | 4
+}
+
+/** Heart rate a plugin supplies (API 6), from another app or device. */
+export interface HeartSource {
+  /**
+   * A reading, in beats a minute; send one a second or so. False (and
+   * ignored) while a Bluetooth monitor is connected in playhound, which
+   * always wins.
+   */
+  push: (bpm: number) => boolean
+  /** Stop supplying it; done for you when the plugin is switched off. */
+  close: () => void
+}
 
 export interface PanelDef {
   /** Shown as the drawer's title and the rail button's tooltip; the plugin's name if absent. */
@@ -120,6 +217,19 @@ export interface PlayerSnapshot {
   /** The picture's own size in pixels (API 3): 0 until the video has loaded, and for sound alone or a video playing elsewhere. Portrait when height > width. */
   width: number
   height: number
+  /** The player's sound (API 7): muted, and its volume 0–1. */
+  muted: boolean
+  volume: number
+  /** It plays in another app, a VR headset (API 7): its sound, if any, is there. */
+  external: boolean
+  /**
+   * Sound is coming out of playhound's player now (API 7): playing, not
+   * muted, the volume up, and what plays has a sound track. False for a
+   * video playing elsewhere (its sound is in the headset). Null while that
+   * can't be told yet: the first moments of a video, before the browser has
+   * decoded any of its sound.
+   */
+  audible: boolean | null
 }
 
 /** Where the picture is drawn in the player (player.picture), in CSS px from the player's top-left. */
@@ -200,7 +310,7 @@ export interface MotionTarget {
 export interface MotionReadout {
   spm: number
   depth: number
-  /** Where the stroke axis is now, 0-1: the generator's output, or a script's while one plays. */
+  /** Where the stroke axis is now, 0-1: the generator's output, or a script's while one plays; before range and invert, as motion.axes has it. */
   pos: number
   /** The app's speed ceiling, strokes per minute. */
   maxSpm: number
@@ -208,8 +318,17 @@ export interface MotionReadout {
   device: boolean
   /** The generator's stroke phase, 0–1 with 0 at the bottom; null while it isn't stroking (a script plays, or it is off). */
   phase: number | null
-  /** Milliseconds until the generator's stroke is next at the bottom (where a beat lands); null while it isn't stroking. */
+  /** Milliseconds until the generator's stroke is next at the bottom (where a beat lands); null while it isn't stroking. A stroke the music source doubles counts as two. */
   nextStrokeInMs: number | null
+  /** The generator's stroke shape (API 7): how `phase` maps to a position. */
+  shape: 'sine' | 'ease' | 'pulse' | 'saw' | 'sharp'
+  /**
+   * The user's device latency (API 7), ms: scripts are sent to the device
+   * this much ahead of the picture, so the device moves with it. Something
+   * that should land with the picture (a sound) follows the video's clock,
+   * not motion.axes, which runs this much early while a script plays.
+   */
+  latencyMs: number
   /**
    * A script is playing and drives the stroke: the generator (motion.take)
    * waits until it stops, since the two never fight over the same axis.
@@ -499,6 +618,134 @@ export interface EdgeState {
   effective: number
 }
 
+// ─── API 4 ───────────────────────────────────────────────────────────────────
+
+/**
+ * What a plugin does to the picture itself (player.effects): CSS, applied to
+ * the video (or the VR view) around the picture's centre. Several plugins'
+ * effects stack: transforms one after another, filters one after another,
+ * opacities multiplied.
+ */
+export interface PictureEffects {
+  /** A CSS transform, e.g. "scale(1.04) translate(3px, 0) rotate(0.5deg)". */
+  transform?: string
+  /** A CSS filter, e.g. "brightness(1.15) saturate(1.3) blur(1px)". */
+  filter?: string
+  /** 0–1. */
+  opacity?: number
+}
+
+/** One axis of a library video's scripts (library.scripts). */
+export interface LibraryScript {
+  /** The TCode channel it drives: L0 (stroke), R0 (twist), V0 (vibrate)… */
+  axis: string
+  /** Its name in playhound ("Stroke", "Twist"…). */
+  label: string
+  /** The file it came from. */
+  name: string
+  /** Funscript actions: `at` in ms, `pos` 0–100. */
+  actions: { at: number, pos: number }[]
+  /** An alternate take of an axis another file also has ("clip (bounce).funscript"). */
+  alt: boolean
+}
+
+/** A library video opened for the plugin's own <video> or <audio> (library.open). */
+export interface MediaHandle {
+  /** Set it as a media element's src: it plays inside playhound only. */
+  url: string
+  /** 'hls' for a playlist (a provided video's), which needs hls.js; else a file. */
+  kind: 'file' | 'hls'
+  /** Let it go. Done for you when the plugin is switched off. */
+  close: () => void
+}
+
+/**
+ * The beats of a piece of music (music.analyse): what playhound's own "Make
+ * a script from the music" works from. Per-beat arrays line up with `beats`.
+ */
+export interface MusicAnalysis {
+  /** Seconds analysed. */
+  duration: number
+  /** The prevailing tempo. */
+  bpm: number
+  /** Beat times, seconds, ascending. */
+  beats: number[]
+  /** Loudness of each beat (to the next), dBFS. */
+  energy: number[]
+  /** Brightness of each beat: spectral centroid, log2 Hz. */
+  centroid: number[]
+  /** Onset strength at each beat; 1 is the track's median beat. */
+  strength: number[]
+  /** Where each beat sits in its bar, 0–3; 0 is the downbeat. */
+  barPos: number[]
+  /** How clearly the beats stand out, 0–1. */
+  confidence: number
+  /** Stretches with no rhythm worth following, seconds. */
+  gaps: { start: number, end: number }[]
+  /** How sure `barPos` is at each beat, 0–1: how clearly the kick marks the downbeat there (API 5). */
+  barConfidence: number[]
+  /** The song's shape: intro, builds, drops, breakdowns, outro, in order, covering all of it (API 5). */
+  sections: MusicSection[]
+}
+
+/** A stretch of a song (API 5). Made of four-bar phrases rated by loudness against the rest of the song. */
+export interface MusicSection {
+  /** Seconds. A section starts on its first beat; the first starts at 0, the last ends at `duration`. */
+  start: number
+  end: number
+  /**
+   * `drop`: the loud part. `build`: rising into a drop. `breakdown`: quiet,
+   * or no beat (a gap). `intro` / `outro`: before the first drop and after
+   * the last. `verse`: in between, or everything in a song too even to tell.
+   */
+  kind: 'intro' | 'verse' | 'build' | 'drop' | 'breakdown' | 'outro'
+  /** How loud it is against the rest of the song, 0–1. */
+  level: number
+  /** Index of its first beat in `beats`; -1 when it has none. */
+  beat: number
+}
+
+/** The strokes behind music.plan's script (API 5). Rests (gaps) are left out. */
+export interface MusicStroke {
+  /** ms: the bottom it starts from. */
+  at: number
+  /** ms: its top. */
+  top: number
+  /** ms: where the next stroke (or rest) starts. */
+  end: number
+  /** Index in `beats` of the beat its bottom is on; -1 for one between beats (strokes faster than the beat). */
+  beat: number
+  /** How deep it was planned, 0–1, before the speed ceiling. */
+  depth: number
+}
+
+/** A library video's strokes (library.strokes, API 5), from its stroke script. */
+export interface StrokeProfile {
+  /** ms: the script's last action. */
+  duration: number
+  /** The typical stroke rate, strokes/min (the median over strokes); 0 with none. */
+  spm: number
+  /** Every stroke, bottom → top → next bottom. Wobble under 8 positions isn't a stroke; nor is a "stroke" over 4 s. */
+  strokes: { at: number, top: number, end: number, depth: number }[]
+  /** Stroke rate through the video, one value per `tempoStep` ms: strokes/min, 0 where it holds still. */
+  tempo: number[]
+  tempoStep: number
+}
+
+/** How music.script strokes; anything left out is the user's own music motion setting. */
+export interface MusicScriptOptions {
+  /** The band the stroke rate should sit in, strokes/min. */
+  bandLo?: number
+  bandHi?: number
+  /** Stroke depth for the quietest and loudest passages, 0–1. */
+  minDepth?: number
+  maxDepth?: number
+  /** Depth follows the loudness; false: every stroke maxDepth deep. */
+  depthFollows?: boolean
+  /** 'centre': strokes around the centre; 'bottom': each from the bottom up. */
+  anchor?: 'centre' | 'bottom'
+}
+
 export interface PluginContext {
   readonly manifest: PluginManifest
   settings: {
@@ -508,7 +755,13 @@ export interface PluginContext {
     /** Called after any setting changes; returns an unsubscribe. */
     onChange: (fn: (values: Record<string, unknown>) => void) => () => void
   }
-  /** Small persistent key/value store for the plugin's own data. */
+  /**
+   * A persistent key/value store for the plugin's own data, in playhound's
+   * IndexedDB: values are copied as structured clones, so objects, arrays,
+   * ArrayBuffers, Blobs and Files all keep. No fixed limit beyond the
+   * browser's own quota (a share of the free disk); it goes when the plugin
+   * is removed.
+   */
   storage: {
     get: <T = unknown>(key: string) => Promise<T | undefined>
     set: (key: string, value: unknown) => Promise<void>
@@ -551,6 +804,12 @@ export interface PluginContext {
     /** The theme changed (its CSS variables already have the new colours): repaint. Returns an unsubscribe. */
     onThemeChange: (fn: (theme: string) => void) => () => void
     toast: (text: string, opts?: { tone?: 'info' | 'success' | 'error', detail?: string }) => void
+    /**
+     * Say how the plugin is doing (API 6): a dot on its rail button and a
+     * line in Settings → Plugins. Null clears it; cleared when the plugin is
+     * switched off.
+     */
+    status: (s: PluginStatus | null) => void
   }
   player: {
     state: () => PlayerSnapshot
@@ -580,6 +839,21 @@ export interface PluginContext {
     seek: (t: number) => boolean
     /** Set the playback speed (0.1–10, 1 is normal). It is the user's speed: the player shows it and keeps it. */
     setRate: (rate: number) => void
+    /**
+     * The player's <video> element itself (API 4), to draw from: a canvas's
+     * drawImage, a WebGL texture. Null with nothing loaded, for sound alone
+     * and while a video plays in another app. It is replaced on every new
+     * video: ask again after onChange. Read it only; play, pause and seek
+     * through playback and player.seek, or playhound loses track.
+     */
+    video: () => HTMLVideoElement | null
+    /**
+     * Change the picture itself (API 4, permission `stage`): scale, move,
+     * tilt, colour, blur. Cheap enough to call every frame. One set per
+     * plugin (calling again replaces it), null clears it; cleared when the
+     * plugin is switched off.
+     */
+    effects: (fx: PictureEffects | null) => void
   }
   /** The user's library. Read-only; empty until a folder is open. */
   library: {
@@ -635,6 +909,25 @@ export interface PluginContext {
     mediaUrl: (videoId: string) => Promise<string | null>
     /** The same for one of its scripts: the .funscript for `axis` (stroke when absent); null if it has none for that axis. */
     scriptUrl: (videoId: string, axis?: string) => Promise<string | null>
+    /**
+     * Its scripts, every axis and alternate take, read from the files (API
+     * 4). An empty list for a video without scripts; null if it isn't in
+     * the library.
+     */
+    scripts: (videoId: string) => Promise<LibraryScript[] | null>
+    /**
+     * A link that plays this library video in the plugin's own <video> or
+     * <audio>, inside playhound, on any platform (API 4). Close it when done.
+     * Null if it isn't in the library.
+     */
+    open: (videoId: string) => Promise<MediaHandle | null>
+    /**
+     * Its stroke script's strokes and stroke rate (API 5), worked out once
+     * and kept until the script changes, so going over a whole library is
+     * quick after the first time. Null if it isn't in the library or has no
+     * stroke script.
+     */
+    strokes: (videoId: string) => Promise<StrokeProfile | null>
   }
   /** What plays. */
   playback: {
@@ -691,6 +984,57 @@ export interface PluginContext {
      * when it is set: set it again to apply a change there.
      */
     filter: (fn: MotionFilter) => () => void
+    /**
+     * Where every axis was last sent (API 6, permission `player` or
+     * `device`), 0–1 by TCode channel ("L0" the stroke, "R2" pitch…),
+     * before the user's range and invert: 0 is the bottom of the stroke
+     * whatever the device is set to. Read it each frame to draw your own.
+     */
+    axes: () => Record<string, number>
+    /**
+     * The same after the user's range and invert (API 7): where the device
+     * itself is told to be, what the Motion panel's traces draw.
+     */
+    output: () => Record<string, number>
+    /**
+     * Every position as it is sent (API 7, permission `player` or `device`),
+     * before range and invert, as motion.axes has it: the axis, the
+     * position 0–1, and in how many ms it should be there (0: it is there
+     * now). Many times a second for each axis that moves, so keep it light.
+     * Returns an unsubscribe; it also ends when the plugin stops.
+     */
+    onAxis: (fn: (axis: string, pos: number, inMs: number) => void) => () => void
+  }
+  /**
+   * Heart rate (API 6, permission `heart`): playhound's own Bluetooth
+   * monitor, or one a plugin supplies.
+   */
+  heart: {
+    /** The latest reading; null with no heart rate coming in. */
+    reading: () => HeartReading | null
+    /** Each new reading, about once a second. Returns an unsubscribe. */
+    onReading: (fn: (r: HeartReading) => void) => () => void
+    /**
+     * Supply the heart rate from somewhere else: a watch app, a web service.
+     * It then works like a Bluetooth monitor (the Device panel, stats, the
+     * heart-rate guard). One source at a time: a second call, from any
+     * plugin, takes over.
+     */
+    provide: (name: string) => HeartSource
+  }
+  /**
+   * Achievements of the plugin's own (API 7, no permission needed). The user
+   * gets a notice when one is earned, and sees them all in Stats.
+   */
+  achievements: {
+    /** Declare them, once at start (calling again replaces the list). Ones earned before stay earned. */
+    define: (list: PluginAchievement[]) => void
+    /** Earn one. True the first time, false after (or for an id not declared). */
+    unlock: (id: string) => boolean
+    /** Progress toward a counted one (`target`): the count so far. It is earned on reaching the target. */
+    progress: (id: string, value: number) => void
+    /** The plugin's own that are earned, by id, with when (ms). */
+    unlocked: () => Record<string, number>
   }
   safety: {
     panicked: () => boolean
@@ -788,6 +1132,35 @@ export interface PluginContext {
       /** The knob moved, by anyone. Returns an unsubscribe. */
       onChange: (fn: (level: number) => void) => () => void
     }
+  }
+  /** Music: its beats, and a script that follows them (API 4). */
+  music: {
+    /**
+     * Find the beats in a song, or in a library video's soundtrack (`video`:
+     * its id, permission `library`). Slow the first time (a few seconds a
+     * minute of music), kept after. `onProgress` gets 0–1. Null when there
+     * is no sound to read or it can't be decoded.
+     */
+    analyse: (source: Blob | { video: string }, opts?: { onProgress?: (f: number) => void }) => Promise<MusicAnalysis | null>
+    /**
+     * A script for the music, as playhound's own "Make a script from the
+     * music" makes it: `at` ms, `pos` 0–100, within the user's speed ceiling.
+     */
+    script: (analysis: MusicAnalysis, opts?: MusicScriptOptions) => { at: number, pos: number }[]
+    /**
+     * The same script, with the strokes it is made of: each bottom, top and
+     * the beat it is on (API 5), so cuts can land exactly on them.
+     */
+    plan: (analysis: MusicAnalysis, opts?: MusicScriptOptions) => { actions: { at: number, pos: number }[], strokes: MusicStroke[] }
+  }
+  /** Getting files out (API 4). */
+  files: {
+    /**
+     * Save a file where the user picks: the save dialog, a download in a
+     * browser without one, the share sheet on Android. Call it from a click.
+     * Resolves false if the user cancelled.
+     */
+    save: (name: string, data: Blob | string | Uint8Array, opts?: { mime?: string }) => Promise<boolean>
   }
   /** Commands in the palette, with optional shortcuts. */
   commands: {

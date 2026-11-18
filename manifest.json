@@ -1,12 +1,12 @@
 {
   "id": "phstash",
   "name": "Stash",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Your Stash collection in playhound's library: the scenes with a script, streamed from Stash with their funscripts, tags, performers and markers.",
   "icon": "icon.png",
   "author": "whatmekota",
   "main": "dist/index.js",
-  "api": 3,
+  "api": 7,
   "permissions": [
     "network",
     "library-source",
@@ -23,5 +23,5 @@
     "interactive",
     "self-hosted"
   ],
-  "minPlayhound": "2.2.0"
+  "minPlayhound": "2.2.8"
 }

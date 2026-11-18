@@ -4,7 +4,7 @@
 
 <!-- Screenshot: add docs/library.webp (Stash scenes in the library) and link it here. -->
 
-Needs playhound **2.2** or newer, in the desktop app or a browser, and Stash **0.25** or newer.
+Needs playhound **2.2.8** or newer (plugin API 7), in the desktop app or a browser, and Stash **0.25** or newer.
 
 ## Install
 
@@ -12,7 +12,7 @@ In playhound: **Settings → Plugins**. Under **Discover**, **Add from GitHub** 
 
 - **Connect to servers through playhound**: to talk to your Stash.
 - **Add videos to your library from another app**: the scenes themselves.
-- **See what is playing**: only for **Tell Stash** below (which scene plays, and when you mark "I came"), which is off until you switch it on.
+- **See what is playing**: which Stash scene plays, and when you mark "I came". It counts the scenes you play for its achievements, and tells Stash only with **Tell Stash** below, which is off until you switch it on.
 
 ## Using it
 
@@ -21,6 +21,7 @@ Switch it on, and if Stash isn't at `http://localhost:9999`, type its address in
 - Each scene brings its **title** (or its file name), its **funscript**, its **tags**, its **performers and studio** as tags too, its **markers** as the script's chapters, its **screenshot** and its **length**. Its info links back to the scene in Stash.
 - Playing one streams it from Stash. A file a browser can't play (WMV, AVI…) is converted by Stash as it plays (HLS, a few seconds at a time), so it seeks like any other; it takes a moment to start, and Stash's CPU.
 - The **Stash** panel (its button on the right-hand rail) says whether it's connected, how many scenes it has, when it last looked and when it looks next. **Look again** fetches the list now, **Test connection** says plainly what's wrong if something is, and **Open Stash** opens Stash itself. **Look for new scenes in Stash** is in the command palette (Ctrl K) too.
+- **Achievements** of its own, in playhound's **Stats → Achievements**: bringing your Stash in, playing 10, 50 and 200 different scenes from it (each for 10 seconds or more), and having a play and an O counted in Stash.
 
 ### A Stash with a password
 
@@ -52,7 +53,7 @@ The scenes it last saw stay in the library, under **Stash (offline)**, instead o
 
 ## Privacy
 
-phstash talks only to the Stash address you give it. It keeps its settings (the API key among them, in playhound's plugin storage on this computer), the last scene list and, with an API key, the small screenshots. With **Tell Stash** off it sends Stash nothing but questions.
+phstash talks only to the Stash address you give it. It keeps its settings (the API key among them, in playhound's plugin storage on this computer), the last scene list, which scenes you played and how many plays and O's Stash took (for the achievements) and, with an API key, the small screenshots. With **Tell Stash** off it sends Stash nothing but questions.
 
 ## Build
 

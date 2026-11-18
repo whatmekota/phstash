@@ -1,7 +1,9 @@
+import type { Feats } from './achievements'
 import type { Selection, StashScene, Version } from './graphql'
 import type { PanelView, Phase } from './panel'
 import type { Config } from './settings'
 import type { LibrarySourceHandle, PluginContext, ProvidedVideo, SelectOption } from './types'
+import { createTrophies, emptyFeats, readFeats } from './achievements'
 import { ADD_O_MUTATION, ADD_PLAY_MUTATION, COUNT_QUERY, featuresOf, pageFilter, SAVED_FILTERS_QUERY, sceneVariables, SelectionError, TAGS_QUERY, versionText } from './graphql'
 import { sceneToVideo } from './map'
 import { renderPanel } from './panel'
@@ -22,6 +24,9 @@ import { createPlayTracker, sceneIdOf } from './writeback'
  * queue keep pointing at them, and a Stash that restarts or sleeps comes back
  * without the library emptying and filling. They're kept across restarts
  * (the plugin's storage), but only for the same server address.
+ *
+ * Bringing Stash in, playing its scenes and telling Stash earn the plugin's
+ * own achievements (see achievements.ts).
  */
 
 const LABEL = 'Stash'
@@ -76,6 +81,15 @@ export default async function activate(ctx: PluginContext) {
 
   const listeners = new Set<() => void>()
   const changed = () => listeners.forEach(fn => fn())
+
+  // ─── Achievements ────────────────────────────────────────────────────────
+  const trophies = createTrophies(ctx.achievements, (...args) => ctx.log(...args))
+  let feats: Feats = emptyFeats()
+  function note(change: (f: Feats) => void) {
+    change(feats)
+    trophies.sync(feats)
+    void ctx.storage.set('feats', feats).catch(err => ctx.log('achievement counts not kept:', err))
+  }
 
   const client = () => createClient({ server: cfg.server, apiKey: cfg.apiKey, fetch: ctx.net.fetch })
   const currentServer = () => {
@@ -210,6 +224,8 @@ export default async function activate(ctx: PluginContext) {
       wasOnline = true
       await ctx.storage.set('cache', { server: sceneServer, at: lastOk, version, total, scenes } satisfies Cache).catch(err => ctx.log('cache not kept:', err))
       await show(LABEL)
+      if (scenes.length && handle && !feats.linked)
+        note(f => void (f.linked = true))
       if (manual)
         ctx.ui.toast(`Stash: ${plural(scenes.length, 'scene')}`, { tone: 'success', detail: total > scenes.length ? `The first ${scenes.length.toLocaleString('en-US')} of ${total.toLocaleString('en-US')}: playhound takes up to 20,000 from one source.` : undefined })
       if (c.headers) {
@@ -410,6 +426,10 @@ export default async function activate(ctx: PluginContext) {
       const count = Object.values(data ?? {})[0]?.count
       ctx.log(`told Stash: ${what} for scene ${sceneId}`, count)
       if (what === 'o')
+        note(f => void f.os++)
+      else
+        note(f => void f.plays++)
+      if (what === 'o')
         ctx.ui.toast('Counted in Stash', { tone: 'success', detail: typeof count === 'number' ? `O counter: ${count}` : undefined })
     }
     catch (err) {
@@ -418,6 +438,8 @@ export default async function activate(ctx: PluginContext) {
   }
 
   const tracker = createPlayTracker((sceneId) => {
+    if (!feats.played.includes(sceneId))
+      note(f => void f.played.push(sceneId))
     if (cfg.writePlays)
       void tell(ADD_PLAY_MUTATION, sceneId, 'play')
   })
@@ -433,6 +455,8 @@ export default async function activate(ctx: PluginContext) {
   })
 
   // ─── Start: what was kept, then a fresh look ─────────────────────────────
+  feats = readFeats(await ctx.storage.get('feats').catch(() => undefined))
+  trophies.sync(feats)
   const cache = await ctx.storage.get<Cache>('cache').catch(() => undefined)
   if (cache && Array.isArray(cache.scenes) && cache.server === currentServer()) {
     scenes = cache.scenes
@@ -443,6 +467,9 @@ export default async function activate(ctx: PluginContext) {
     if (cfg.apiKey)
       void thumbs.run(sceneServer, { ApiKey: cfg.apiKey }, scenes).then(() => scheduleRemap(0))
     await show(LABEL)
+    // A list kept from before 0.2.0 was brought in then.
+    if (scenes.length && handle && !feats.linked)
+      note(f => void (f.linked = true))
   }
   void sync()
 

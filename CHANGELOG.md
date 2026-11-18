@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+For playhound 2.2.8 and newer (plugin API 7).
+
+- **Achievements**, 6 of them, in Stats → Achievements: bringing your Stash into the library, playing 10, 50 and 200 different scenes from Stash (a play counts after 10 seconds, as for Tell Stash), and the first play and the first O that Stash takes. A scene list kept from before counts as brought in; plays count from this version on.
+- The plugin contract (`src/types.ts`) is playhound's API 7 copy.
+
 ## 0.1.0
 
 First version, for playhound 2.2 and newer, and Stash 0.25 and newer.
